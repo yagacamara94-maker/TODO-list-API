@@ -185,6 +185,7 @@ O valor deve ser um dos seguintes:
 
 - `400 Bad Request`: dados inválidos no corpo da requisição.
 - `404 Not Found`: tarefa não encontrada para o identificador informado.
+- `405 Method Not Allowed`: método HTTP não disponível para o endpoint.
 
 ## Testes
 
@@ -194,7 +195,21 @@ Os testes podem ser executados com:
 python manage.py test
 ```
 
-Atualmente, a estrutura de testes existe, mas ainda não contém casos automatizados para os endpoints.
+A suíte usa `APITestCase` e cobre 15 cenários, incluindo:
+
+- Listagem com e sem tarefas.
+- Criação com dados válidos, título ausente ou inválido e status não permitido na criação.
+- Atualização completa com `PUT` e atualização parcial com `PATCH`.
+- Rejeição de `PUT` incompleto e de dados inválidos na atualização.
+- Busca por trecho do título e busca sem resultados.
+- Exclusão de tarefas.
+- Acesso a tarefa inexistente e uso de método HTTP não permitido.
+
+O comando deve terminar com todos os testes aprovados e sem problemas na checagem do Django:
+
+```powershell
+python manage.py check
+```
 
 ## Configuração para produção
 

@@ -26,7 +26,6 @@ class CreateTarefa(APIView):
 
 class TarefaDetail(APIView):
     permission_classes = [AllowAny]
-
     def put(self,request,id,format=None):
         tarefa = get_object_or_404(Tarefa,pk=id)
         serializer = UpdateTarefaSerializer(tarefa,data=request.data)

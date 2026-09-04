@@ -5,13 +5,16 @@ urlpatterns = [
     path(
         '',
         CreateTarefa.as_view(),
+        name='List-Create'
     ),
     path(
         '<int:id>/',
         TarefaDetail.as_view(),
+        name='Update-Delete'
     ),
     path(
         '<str:titulo>/',
-        TarefaRetrieve.as_view()
+        TarefaRetrieve.as_view(),
+        name='Retrieve'
     )
 ]
