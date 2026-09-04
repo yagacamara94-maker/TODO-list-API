@@ -47,3 +47,12 @@ class TarefaDetail(APIView):
         tarefa = get_object_or_404(Tarefa,pk=id)
         tarefa.delete()
         return Response(data={"mensagem":"Tarefa apagada com sucesso!"})
+
+
+class TarefaRetrieve(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self,request,titulo):
+        tarefas = Tarefa.objects.filter(titulo__icontains=titulo)
+        serializer = UpdateTarefaSerializer(tarefas,many=True)
+        return Response(serializer.data,status=200)

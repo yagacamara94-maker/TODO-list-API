@@ -25,8 +25,8 @@ class CreateTarefaSerializer(serializers.ModelSerializer):
 class UpdateTarefaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tarefa
-        fields = ['id','titulo', 'status']
-        read_only_fields = ['id']
+        fields = ['id','titulo', 'status','data_criacao']
+        read_only_fields = ['id','data_criacao']
 
     def validate_titulo(self, titulo):
             titulo = titulo.strip()

@@ -13,6 +13,7 @@ API REST para gerenciamento de tarefas, construída com Django e Django REST Fra
 
 - Criar tarefas
 - Listar todas as tarefas
+- Buscar tarefas por trecho do título
 - Atualizar uma tarefa completamente com `PUT`
 - Atualizar apenas alguns campos com `PATCH`
 - Excluir tarefas
@@ -81,6 +82,7 @@ O painel administrativo está em `http://127.0.0.1:8000/admin/`.
 |---|---|---|
 | `GET` | `/tarefas/` | Lista todas as tarefas |
 | `POST` | `/tarefas/` | Cria uma tarefa |
+| `GET` | `/tarefas/<titulo>/` | Busca tarefas cujo título contém o texto informado |
 | `PUT` | `/tarefas/<id>/` | Substitui os dados editáveis da tarefa |
 | `PATCH` | `/tarefas/<id>/` | Atualiza parcialmente uma tarefa |
 | `DELETE` | `/tarefas/<id>/` | Exclui uma tarefa |
@@ -122,9 +124,21 @@ Resposta esperada:
 curl http://127.0.0.1:8000/tarefas/
 ```
 
+### Buscar tarefas por título
+
+A busca não diferencia letras maiúsculas de minúsculas e retorna todas as tarefas cujo título contém o trecho informado:
+
+```bash
+curl http://127.0.0.1:8000/tarefas/django/
+```
+
+O resultado é uma lista de tarefas com `id`, `titulo`, `status` e `data_criacao`. Para títulos com espaços ou caracteres especiais, codifique o valor na URL.
+
 ### Atualização completa com `PUT`
 
 No `PUT`, envie os campos obrigatórios do serializer de atualização:
+
+O campo `data_criacao` também faz parte da representação de atualização, mas é somente leitura e não deve ser enviado para alteração.
 
 ```bash
 curl -X PUT http://127.0.0.1:8000/tarefas/1/ \
