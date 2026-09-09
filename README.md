@@ -1,6 +1,6 @@
 # TODO List API
 
-API REST para gerenciamento de tarefas e cadastro de usuários, construída com Django, Django REST Framework e SimpleJWT. O projeto permite criar, listar, editar, atualizar parcialmente e excluir tarefas, além de registrar usuários usando uma API baseada em JSON.
+API REST para gerenciamento de tarefas e cadastro de usuários, construída com Django, Django REST Framework e SimpleJWT. O projeto oferece cadastro de usuários, autenticação JWT e operações CRUD para tarefas.
 
 ## Tecnologias
 
@@ -12,18 +12,15 @@ API REST para gerenciamento de tarefas e cadastro de usuários, construída com 
 
 ## Funcionalidades
 
-- Criar tarefas
-- Listar todas as tarefas
-- Buscar tarefas por trecho do título
-- Atualizar uma tarefa completamente com `PUT`
-- Atualizar apenas alguns campos com `PATCH`
+- Criar, listar e buscar tarefas
+- Atualizar tarefas com `PUT` e `PATCH`
 - Excluir tarefas
 - Validar título e status
-- Retornar `404 Not Found` quando a tarefa não existe
-- Registrar usuários com username, email e senha
-- Validar confirmação e força da senha
-- Usar um modelo de usuário customizado
-- Configurar autenticação JWT e permissões autenticadas por padrão
+- Registrar usuários com `username`, `email`, `password` e `confirm_password`
+- Validar força da senha e confirmação
+- Usar `CustomUser` como modelo de autenticação
+- Fazer login com `username` ou `email` e receber tokens JWT
+- Configurar `JWTAuthentication` como autenticação padrão do DRF
 
 ## Estrutura do projeto
 
@@ -94,17 +91,23 @@ O painel administrativo está em `http://127.0.0.1:8000/admin/`.
 |---|---|---|
 | `GET` | `/tarefas/` | Lista todas as tarefas |
 | `POST` | `/tarefas/` | Cria uma tarefa |
-| `GET` | `/tarefas/<titulo>/` | Busca tarefas cujo título contém o texto informado |
-| `PUT` | `/tarefas/<id>/` | Substitui os dados editáveis da tarefa |
-| `PATCH` | `/tarefas/<id>/` | Atualiza parcialmente uma tarefa |
-| `DELETE` | `/tarefas/<id>/` | Exclui uma tarefa |
-| `POST` | `/autenticacao/registro/` | Registra um novo usuário |
+| `GET` | `/tarefas/<titulo>/` | Busca tarefas por trecho do título |
+| `PUT` | `/tarefas/<id>/` | Atualiza totalmente a tarefa |
+| `PATCH` | `/tarefas/<id>/` | Atualiza parcialmente a tarefa |
+| `DELETE` | `/tarefas/<id>/` | Exclui a tarefa |
+| `POST` | `/autenticacao/registro/` | Registra um usuário |
+| `POST` | `/autenticacao/login/` | Gera tokens JWT com login via username ou email |
 
-Todos os endpoints recebem e retornam JSON quando aplicável.
+## Autenticação e permissões
 
-O cadastro de usuário não exige autenticação. Os endpoints de tarefas também
-definem `AllowAny` explicitamente; os demais endpoints usam a permissão global
-`IsAuthenticated` configurada no projeto.
+O projeto usa `JWTAuthentication` como autenticação padrão no DRF. A configuração global exige autenticação por padrão, mas os endpoints de tarefas e de registro foram explicitamente definidos com `AllowAny` nas views.
+
+Em outras palavras:
+
+- `/autenticacao/registro/` é público
+- `/autenticacao/login/` é público
+- `/tarefas/` e `/tarefas/<id>/` também estão públicos na implementação atual
+- em caso de autenticação exigida em outros endpoints, o mecanismo do projeto já está pronto para `JWTAuthentication`
 
 ## Cadastro de usuário
 
@@ -122,8 +125,36 @@ O campo `password` nunca é retornado na resposta. A senha é armazenada usando
 o hashing padrão do Django.
 
 O projeto usa `usuarios.CustomUser` como modelo de usuário e configura
-`JWTAuthentication` como autenticação padrão do Django REST Framework. Os
-tokens JWT ainda não possuem endpoints próprios neste projeto.
+`JWTAuthentication` como autenticação padrão do Django REST Framework. O login
+é feito por `CustomTokenObtainPairView`, que aceita `username` ou `email`.
+
+## Login com JWT
+
+O endpoint de login aceita `username` ou `email` no campo `username` e retorna
+`access` e `refresh`.
+
+```bash
+curl -X POST http://127.0.0.1:8000/autenticacao/login/ \
+  -H "Content-Type: application/json" \
+  -d '{"username":"usuario_teste","password":"SenhaForte123!"}'
+```
+
+ou
+
+```bash
+curl -X POST http://127.0.0.1:8000/autenticacao/login/ \
+  -H "Content-Type: application/json" \
+  -d '{"username":"usuario@example.com","password":"SenhaForte123!"}'
+```
+
+Resposta esperada:
+
+```json
+{
+  "refresh": "<token_refresh>",
+  "access": "<token_access>"
+}
+```
 
 ## Modelo de tarefa
 
@@ -240,22 +271,24 @@ Os testes podem ser executados com:
 python manage.py test
 ```
 
-A suíte usa `APITestCase` e cobre os endpoints de tarefas e o cadastro de
-usuários, incluindo:
+A suíte atual cobre:
 
-- Listagem com e sem tarefas.
-- Criação com dados válidos, título ausente ou inválido e status não permitido na criação.
-- Atualização completa com `PUT` e atualização parcial com `PATCH`.
-- Rejeição de `PUT` incompleto e de dados inválidos na atualização.
-- Busca por trecho do título e busca sem resultados.
-- Exclusão de tarefas.
-- Acesso a tarefa inexistente e uso de método HTTP não permitido.
-- Registro de usuário com dados válidos e verificação do hashing da senha.
-- Remoção de espaços do username e rejeição de username curto.
-- Rejeição de senhas diferentes ou fracas.
-- Rejeição de email duplicado ou inválido.
+- listagem de tarefas vazia e com registros
+- criação com dados válidos
+- criação inválida com título ausente, título curto, título longo e status inválido
+- atualização completa com `PUT`
+- atualização parcial com `PATCH`
+- rejeição de `PUT` incompleto
+- rejeição de método HTTP não permitido
+- tentativa de atualizar tarefa inexistente
+- busca por título com e sem resultados
+- exclusão de tarefa
+- registro de usuário com dados válidos
+- validação de `username`, `email`, `password` e `confirm_password`
+- login com `username` e com `email`
+- rejeição de credenciais inválidas
 
-O comando deve terminar com todos os testes aprovados e sem problemas na checagem do Django:
+Verificação do Django:
 
 ```powershell
 python manage.py check
@@ -274,7 +307,8 @@ O projeto está configurado para desenvolvimento. Antes de publicar a aplicaçã
 
 ## Observações atuais
 
-- O banco padrão é o SQLite, armazenado em `db.sqlite3`.
-- Os endpoints de tarefas e o cadastro usam `AllowAny` explicitamente.
-- A autenticação JWT está configurada, mas os endpoints de emissão e renovação de tokens ainda não foram adicionados.
-- O projeto não possui ainda documentação OpenAPI/Swagger.
+- o banco padrão é SQLite em `db.sqlite3`
+- o projeto usa `CustomUser` em `usuarios/models.py`
+- os endpoints de tarefas e autenticação estão públicos na implementação atual
+- os tokens JWT são emitidos via endpoint customizado de login
+- ainda não há documentação OpenAPI/Swagger
