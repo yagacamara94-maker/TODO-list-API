@@ -2,9 +2,13 @@ from .models import Tarefa
 from rest_framework import serializers
 
 class CreateTarefaSerializer(serializers.ModelSerializer):
+    usuario = serializers.HiddenField(
+        default=serializers.CurrentUserDefault()
+    )
+
     class Meta:
         model = Tarefa
-        fields = ['id','titulo', 'status','data_criacao']
+        fields = ['id','titulo', 'status','data_criacao','usuario']
         read_only_fields = ['id','data_criacao']
 
     def validate_titulo(self, titulo):
@@ -23,6 +27,7 @@ class CreateTarefaSerializer(serializers.ModelSerializer):
         return status
 
 class UpdateTarefaSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = Tarefa
         fields = ['id','titulo', 'status','data_criacao']

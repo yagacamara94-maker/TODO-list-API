@@ -146,3 +146,32 @@ class LoginUsuarioTests(APITestCase):
         self.assertTrue(
             'non_field_errors' in response.data or 'detail' in response.data
         )
+
+    def test_refresh_token_com_refresh_valido(self):
+        login_response = self.client.post(
+            self.url,
+            {'username': 'usuario_teste', 'password': 'SenhaForte123!'},
+            format='json',
+        )
+
+        self.assertEqual(login_response.status_code, status.HTTP_200_OK)
+        refresh_token = login_response.data['refresh']
+
+        response = self.client.post(
+            '/autenticacao/refresh/',
+            {'refresh': refresh_token},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', response.data)
+
+    def test_refresh_token_com_refresh_invalido(self):
+        response = self.client.post(
+            '/autenticacao/refresh/',
+            {'refresh': 'token-invalido'},
+            format='json',
+        )
+
+        self.assertIn(response.status_code, (status.HTTP_400_BAD_REQUEST, status.HTTP_401_UNAUTHORIZED))
+        self.assertTrue('detail' in response.data or 'non_field_errors' in response.data)

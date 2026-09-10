@@ -12,9 +12,10 @@ API REST para gerenciamento de tarefas e cadastro de usuários, construída com 
 
 ## Funcionalidades
 
-- Criar, listar e buscar tarefas
+- Criar, listar e buscar tarefas do usuário autenticado
 - Atualizar tarefas com `PUT` e `PATCH`
 - Excluir tarefas
+- Associar cada tarefa ao usuário que a criou
 - Validar título e status
 - Registrar usuários com `username`, `email`, `password` e `confirm_password`
 - Validar força da senha e confirmação
@@ -89,25 +90,34 @@ O painel administrativo está em `http://127.0.0.1:8000/admin/`.
 
 | Método | Endpoint | Descrição |
 |---|---|---|
-| `GET` | `/tarefas/` | Lista todas as tarefas |
-| `POST` | `/tarefas/` | Cria uma tarefa |
-| `GET` | `/tarefas/<titulo>/` | Busca tarefas por trecho do título |
-| `PUT` | `/tarefas/<id>/` | Atualiza totalmente a tarefa |
-| `PATCH` | `/tarefas/<id>/` | Atualiza parcialmente a tarefa |
-| `DELETE` | `/tarefas/<id>/` | Exclui a tarefa |
+| `GET` | `/tarefas/` | Lista as tarefas do usuário autenticado |
+| `POST` | `/tarefas/` | Cria uma tarefa para o usuário autenticado |
+| `GET` | `/tarefas/<titulo>/` | Busca tarefas do usuário autenticado por trecho do título |
+| `PUT` | `/tarefas/<id>/` | Atualiza totalmente uma tarefa do usuário autenticado |
+| `PATCH` | `/tarefas/<id>/` | Atualiza parcialmente uma tarefa do usuário autenticado |
+| `DELETE` | `/tarefas/<id>/` | Exclui uma tarefa do usuário autenticado |
 | `POST` | `/autenticacao/registro/` | Registra um usuário |
 | `POST` | `/autenticacao/login/` | Gera tokens JWT com login via username ou email |
+| `POST` | `/autenticacao/refresh/` | Gera um novo access token usando um refresh token válido |
 
 ## Autenticação e permissões
 
-O projeto usa `JWTAuthentication` como autenticação padrão no DRF. A configuração global exige autenticação por padrão, mas os endpoints de tarefas e de registro foram explicitamente definidos com `AllowAny` nas views.
+O projeto usa `JWTAuthentication` como autenticação padrão no DRF. Os endpoints de tarefas exigem um access token JWT válido.
 
 Em outras palavras:
 
 - `/autenticacao/registro/` é público
 - `/autenticacao/login/` é público
-- `/tarefas/` e `/tarefas/<id>/` também estão públicos na implementação atual
-- em caso de autenticação exigida em outros endpoints, o mecanismo do projeto já está pronto para `JWTAuthentication`
+- `/autenticacao/refresh/` é público e exige um refresh token válido
+- `/tarefas/` e `/tarefas/<id>/` exigem autenticação
+- uma tarefa só pode ser listada, buscada, alterada ou excluída pelo usuário ao qual pertence
+- o usuário da tarefa é preenchido automaticamente a partir do token JWT e não deve ser enviado no corpo da requisição
+
+Para acessar os endpoints de tarefas, envie o access token no cabeçalho:
+
+```text
+Authorization: Bearer <token_access>
+```
 
 ## Cadastro de usuário
 
@@ -156,6 +166,27 @@ Resposta esperada:
 }
 ```
 
+## Renovação do access token
+
+Quando o access token expirar, envie o refresh token para obter um novo access
+token:
+
+```bash
+curl -X POST http://127.0.0.1:8000/autenticacao/refresh/ \
+  -H "Content-Type: application/json" \
+  -d '{"refresh":"<token_refresh>"}'
+```
+
+Resposta esperada:
+
+```json
+{
+  "access": "<novo_token_access>"
+}
+```
+
+Um refresh token inválido ou expirado é rejeitado pela API.
+
 ## Modelo de tarefa
 
 | Campo | Tipo | Obrigatório | Observações |
@@ -164,6 +195,7 @@ Resposta esperada:
 | `titulo` | string | Sim | Entre 3 e 200 caracteres, sem espaços nas extremidades |
 | `status` | string | Não | `P` (pendente), `A` (andamento) ou `F` (feito) |
 | `data_criacao` | data | Não | Gerada automaticamente na criação |
+| `usuario` | relação com usuário | Sim | Preenchido automaticamente com o usuário autenticado |
 
 O status padrão de uma nova tarefa é `P`.
 
@@ -174,6 +206,7 @@ O status padrão de uma nova tarefa é `P`.
 ```bash
 curl -X POST http://127.0.0.1:8000/tarefas/ \
 	-H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token_access>" \
 	-d '{"titulo":"Estudar Django","status":"P"}'
 ```
 
@@ -188,7 +221,8 @@ Resposta esperada:
 ### Listar tarefas
 
 ```bash
-curl http://127.0.0.1:8000/tarefas/
+curl http://127.0.0.1:8000/tarefas/ \
+  -H "Authorization: Bearer <token_access>"
 ```
 
 ### Buscar tarefas por título
@@ -196,7 +230,8 @@ curl http://127.0.0.1:8000/tarefas/
 A busca não diferencia letras maiúsculas de minúsculas e retorna todas as tarefas cujo título contém o trecho informado:
 
 ```bash
-curl http://127.0.0.1:8000/tarefas/django/
+curl http://127.0.0.1:8000/tarefas/django/ \
+  -H "Authorization: Bearer <token_access>"
 ```
 
 O resultado é uma lista de tarefas com `id`, `titulo`, `status` e `data_criacao`. Para títulos com espaços ou caracteres especiais, codifique o valor na URL.
@@ -210,6 +245,7 @@ O campo `data_criacao` também faz parte da representação de atualização, ma
 ```bash
 curl -X PUT http://127.0.0.1:8000/tarefas/1/ \
 	-H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token_access>" \
 	-d '{"titulo":"Estudar Django REST Framework","status":"A"}'
 ```
 
@@ -220,6 +256,7 @@ Use `PATCH` quando quiser alterar somente um campo. O `partial=True` é aplicado
 ```bash
 curl -X PATCH http://127.0.0.1:8000/tarefas/1/ \
 	-H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token_access>" \
 	-d '{"status":"F"}'
 ```
 
@@ -228,7 +265,8 @@ Nesse caso, `titulo` não precisa ser enviado.
 ### Excluir uma tarefa
 
 ```bash
-curl -X DELETE http://127.0.0.1:8000/tarefas/1/
+curl -X DELETE http://127.0.0.1:8000/tarefas/1/ \
+  -H "Authorization: Bearer <token_access>"
 ```
 
 ## Validações
@@ -274,6 +312,9 @@ python manage.py test
 A suíte atual cobre:
 
 - listagem de tarefas vazia e com registros
+- rejeição de requisições sem autenticação
+- listagem e busca limitadas às tarefas do usuário autenticado
+- rejeição de alteração ou exclusão de tarefa de outro usuário
 - criação com dados válidos
 - criação inválida com título ausente, título curto, título longo e status inválido
 - atualização completa com `PUT`
@@ -287,6 +328,8 @@ A suíte atual cobre:
 - validação de `username`, `email`, `password` e `confirm_password`
 - login com `username` e com `email`
 - rejeição de credenciais inválidas
+- renovação de access token com refresh token válido
+- rejeição de refresh token inválido
 
 Verificação do Django:
 
@@ -309,6 +352,7 @@ O projeto está configurado para desenvolvimento. Antes de publicar a aplicaçã
 
 - o banco padrão é SQLite em `db.sqlite3`
 - o projeto usa `CustomUser` em `usuarios/models.py`
-- os endpoints de tarefas e autenticação estão públicos na implementação atual
+- registro, login e renovação de token são públicos; os endpoints de tarefas exigem autenticação
+- cada usuário acessa somente as próprias tarefas
 - os tokens JWT são emitidos via endpoint customizado de login
 - ainda não há documentação OpenAPI/Swagger

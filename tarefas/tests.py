@@ -1,4 +1,5 @@
 from django.urls import reverse
+from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -8,8 +9,60 @@ from .models import Tarefa
 class TarefaAPITestCase(APITestCase):
     list_create_url = reverse('List-Create')
 
-    def criar_tarefa(self, titulo='Estudar', tarefa_status='P'):
-        return Tarefa.objects.create(titulo=titulo, status=tarefa_status)
+    def setUp(self):
+        self.usuario = get_user_model().objects.create_user(
+            username='usuario_teste',
+            email='usuario@example.com',
+            password='SenhaForte123!',
+        )
+        self.outro_usuario = get_user_model().objects.create_user(
+            username='outro_usuario',
+            email='outro@example.com',
+            password='SenhaForte123!',
+        )
+        self.client.force_authenticate(user=self.usuario)
+
+    def criar_tarefa(self, titulo='Estudar', tarefa_status='P', usuario=None):
+        return Tarefa.objects.create(
+            titulo=titulo,
+            status=tarefa_status,
+            usuario=usuario or self.usuario,
+        )
+
+    def test_rejeita_requisicao_sem_autenticacao(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get(self.list_create_url)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_rejeita_criacao_sem_autenticacao(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.post(
+            self.list_create_url,
+            {'titulo': 'Estudar Django', 'status': 'P'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_rejeita_acesso_ao_detalhe_sem_autenticacao(self):
+        tarefa = self.criar_tarefa()
+        self.client.force_authenticate(user=None)
+
+        response = self.client.delete(
+            reverse('Update-Delete', kwargs={'id': tarefa.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_rejeita_busca_sem_autenticacao(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.get(reverse('Retrieve', kwargs={'titulo': 'Estudar'}))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
     def test_lista_tarefas_vazia(self):
         response = self.client.get(self.list_create_url)
@@ -40,6 +93,7 @@ class TarefaAPITestCase(APITestCase):
         tarefa = Tarefa.objects.get()
         self.assertEqual(tarefa.titulo, 'Estudar Django')
         self.assertEqual(tarefa.status, 'P')
+        self.assertEqual(tarefa.usuario_id, self.usuario.id)
 
     def test_nao_cria_tarefa_com_titulo_ausente(self):
         response = self.client.post(
@@ -127,6 +181,25 @@ class TarefaAPITestCase(APITestCase):
                 )
                 self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_nao_acessa_tarefa_de_outro_usuario(self):
+        tarefa = self.criar_tarefa(usuario=self.outro_usuario)
+        url = reverse('Update-Delete', kwargs={'id': tarefa.id})
+
+        for metodo in ('put', 'patch', 'delete'):
+            with self.subTest(metodo=metodo):
+                response = getattr(self.client, metodo)(
+                    url,
+                    {'titulo': 'Alterar tarefa', 'status': 'A'}
+                    if metodo != 'delete' else None,
+                    format='json',
+                )
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+        tarefa.refresh_from_db()
+        self.assertEqual(tarefa.titulo, 'Estudar')
+        self.assertEqual(tarefa.status, 'P')
+        self.assertEqual(tarefa.usuario_id, self.outro_usuario.id)
+
     def test_rejeita_dados_invalidos_na_atualizacao(self):
         tarefa = self.criar_tarefa()
         url = reverse('Update-Delete', kwargs={'id': tarefa.id})
@@ -156,6 +229,24 @@ class TarefaAPITestCase(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]['titulo'], 'Estudar Django')
+
+    def test_lista_apenas_tarefas_do_usuario_logado(self):
+        tarefa_do_usuario = self.criar_tarefa('Tarefa própria')
+        self.criar_tarefa('Tarefa de outro usuário', usuario=self.outro_usuario)
+
+        response = self.client.get(self.list_create_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item['id'] for item in response.data], [tarefa_do_usuario.id])
+
+    def test_busca_apenas_tarefas_do_usuario_logado(self):
+        tarefa_do_usuario = self.criar_tarefa('Estudar Django')
+        self.criar_tarefa('Estudar Django', usuario=self.outro_usuario)
+
+        response = self.client.get(reverse('Retrieve', kwargs={'titulo': 'django'}))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual([item['id'] for item in response.data], [tarefa_do_usuario.id])
 
     def test_busca_titulo_sem_resultados(self):
         response = self.client.get(reverse('Retrieve', kwargs={'titulo': 'inexistente'}))
